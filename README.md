@@ -65,7 +65,7 @@ This produces `PlexMini.app/` and a `PlexMini.app.tar.gz`.
 ## Install
 
 ```bash
-DEVICE_PASS=your_password ./install.sh 192.168.1.42
+DEVICE_PASS=your_password ./install.sh ipaddress
 ```
 
 The script copies the bundle, verifies by checksum that what landed on the device matches what you built, signs it with `ldid`, refreshes the icon cache and kills any running instance. On a first install you may need a manual `sbreload` for the icon to appear.
