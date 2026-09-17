@@ -48,6 +48,15 @@ The server address lives in `src/PlexConfig.h`:
 
 Change it to your own server before building. That's the only edit required.
 
+If you'd rather not have your own address sitting in a tracked file — handy if you fork this — you can supply it at build time instead, and leave `PlexConfig.h` alone:
+
+```bash
+echo 'http://ipaddress:port' > server.local   # gitignored
+./build.sh
+```
+
+or per-build: `PLEX_SERVER_URL=http://ipaddress:port ./build.sh`
+
 ## Build
 
 ```bash

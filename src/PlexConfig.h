@@ -1,7 +1,11 @@
 #import <Foundation/Foundation.h>
 
-// Change this to point at your own Plex Media Server.
-#define PLEX_SERVER   @"http://192.168.1.149:32400"
+// Point this at your own Plex Media Server, either by editing the line below or,
+// to keep your own address out of the repo, by creating a "server.local" file
+// next to build.sh containing just the URL (see the README).
+#ifndef PLEX_SERVER
+#define PLEX_SERVER   @"http://ipaddress:port"
+#endif
 
 #define PLEX_PRODUCT  @"PlexMini iPad"
 #define PLEX_VERSION  @"2.0"

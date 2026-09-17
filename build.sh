@@ -23,6 +23,17 @@ if [ ! -d "$SDK" ]; then
 fi
 
 TARGET_FLAGS=(-target armv7s-apple-ios9.0 -isysroot "$SDK" -fuse-ld="$TC/ld" -w)
+
+# The server address can be supplied without editing (and accidentally committing)
+# PlexConfig.h: either export PLEX_SERVER_URL, or drop the URL in a "server.local"
+# file, which is gitignored.
+if [ -z "${PLEX_SERVER_URL:-}" ] && [ -f "$ROOT/server.local" ]; then
+  PLEX_SERVER_URL="$(tr -d '[:space:]' < "$ROOT/server.local")"
+fi
+if [ -n "${PLEX_SERVER_URL:-}" ]; then
+  echo "==> server: $PLEX_SERVER_URL"
+  TARGET_FLAGS+=("-DPLEX_SERVER=@\"$PLEX_SERVER_URL\"")
+fi
 FRAMEWORKS=(
   -framework UIKit -framework Foundation -framework CoreGraphics
   -framework QuartzCore -framework AVFoundation -framework AVKit -framework CoreMedia

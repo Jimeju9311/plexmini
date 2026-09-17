@@ -11,3 +11,6 @@
 # macOS / editor noise
 .DS_Store
 *.swp
+
+# Your own server address, kept out of the repo
+server.local
