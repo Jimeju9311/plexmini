@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploys PlexMini.app to a jailbroken device over SSH.
 #
-#   ./install.sh 192.168.1.42
+#   ./install.sh ipaddress
 #
 # Requires: sshpass (or edit this to use key auth), and the device must have
 # OpenSSH installed from Cydia/Sileo.
