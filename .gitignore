@@ -2,6 +2,11 @@
 *.o
 *.app/
 *.app.tar.gz
+.build/
+.package/
+
+# Packaged releases are attached to GitHub Releases, not tracked here
+*.deb
 
 # macOS / editor noise
 .DS_Store

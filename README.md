@@ -40,13 +40,13 @@ Multi-user, Live TV/DVR, music, photos, Chromecast/AirPlay, offline downloads, s
 
 ## Configuration
 
-The server address lives at the top of `main.m`:
+The server address lives in `src/PlexConfig.h`:
 
 ```objc
 #define PLEX_SERVER   @"http://ipaddress:port"
 ```
 
-Change it to your own server before building.
+Change it to your own server before building. That's the only edit required.
 
 ## Build
 
@@ -62,33 +62,77 @@ THEOS=/opt/theos ./build.sh
 
 This produces `PlexMini.app/` and a `PlexMini.app.tar.gz`.
 
+---
+
 ## Install
+
+### If you just want the app (no Theos, no compiler)
+
+Grab `com.juan.plexmini_<version>_iphoneos-arm.deb` from the [Releases](https://github.com/Jimeju9311/plexmini/releases) page. It's a standard jailbreak package that installs into `/Applications`, and there are three ways to install it — no development tools needed:
+
+**With Filza** (easiest, all on-device): copy the `.deb` to the iPad however you like (AirDrop, email, a web download), tap it in Filza, and choose *Install*.
+
+**With Sileo or Cydia**: put the `.deb` somewhere the device can reach it, then open it with the package manager and confirm the install.
+
+**Over SSH**, if you have OpenSSH from Cydia/Sileo:
+
+```bash
+scp com.juan.plexmini_*_iphoneos-arm.deb root@<device-ip>:/tmp/
+ssh root@<device-ip> 'dpkg -i /tmp/com.juan.plexmini_*_iphoneos-arm.deb'
+```
+
+The default root password on a fresh jailbreak is `alpine` — **change it** before exposing SSH to anything.
+
+**One caveat**: the server address is compiled into the binary, so a prebuilt package points at whatever server it was built against. Unless that happens to be yours, you'll need to [build it yourself](#build) after changing one line — which is really the intended path for anyone but me.
+
+> If the icon doesn't appear on the home screen, respring the device (or run `uicache`). The package tries to refresh the icon cache on its own, but on iOS 10 `uicache` sometimes never returns, so it is deliberately fired off detached — the install always completes, and worst case you respring.
+
+### If you build from source
 
 ```bash
 DEVICE_PASS=your_password ./install.sh ipaddress
 ```
 
-The script copies the bundle, verifies by checksum that what landed on the device matches what you built, signs it with `ldid`, refreshes the icon cache and kills any running instance. On a first install you may need a manual `sbreload` for the icon to appear.
+The script copies the bundle, verifies by checksum that what landed on the device matches what you built, signs it with `ldid`, refreshes the icon cache and kills any running instance.
 
 > **Note**: `scp -r` onto a directory that already exists **nests** the copy inside it (`PlexMini.app/PlexMini.app/…`) instead of replacing it, silently leaving the old binary in place and running. That's why the script removes the destination first and verifies the checksum — do the same if you deploy by hand.
+
+To build the installable package instead:
+
+```bash
+./package.sh
+```
+
+That produces the `.deb` described above.
+
+### Why a `.deb` and not an `.ipa`
+
+`.ipa` is the sideloading format for **non-jailbroken** devices, and it needs an Apple signing certificate — a free developer account gives you one that expires every 7 days, which means reinstalling the app weekly. Since this app targets jailbroken devices anyway, it installs into `/Applications` as a `.deb` with ad-hoc `ldid` signing: no Apple account, no expiry, and it behaves like any other package your device's package manager manages.
 
 ---
 
 ## Architecture
 
-Everything lives in a single `main.m` (~1500 lines), with no external dependencies:
+One class per file under `src/`, ~1600 lines total, with no external dependencies:
 
-| Component | Responsibility |
+| File | Responsibility |
 |---|---|
+| `PlexConfig.h` | Server address and the `X-Plex-*` identity headers |
 | `PlexClient` | HTTP client for the Plex API: PIN linking, JSON, images, subtitles |
+| `PlexTheme` | Colors and the Core Graphics–drawn control icons |
 | `LinkViewController` | Linking screen showing the `plex.tv/link` code |
 | `PlexListViewController` | Library/show/season browsing (reused at every level) |
+| `PlexCell` | Grid cell with async thumbnail loading |
 | `PlexDetailViewController` | Title detail: artwork, summary, play and subtitle buttons |
 | `PlexPlayerViewController` | Player built on `AVPlayerLayer` with custom controls |
-| `SubtitlePickerViewController` | Track selection and online search |
 | `PlexPlayback` | Transcode URL construction |
+| `SubtitlePickerViewController` | Track selection and online search |
+| `SubtitleSearchResultsViewController` | Results of an online subtitle search |
+| `AppDelegate` | Window setup and the linked/not-linked decision at launch |
 
-`rt_shims.c` provides runtime symbols (`_Unwind_SjLj_*`) that the armv7s toolchain doesn't ship. For the same reason the code avoids the `%` operator on integers: `__modsi3` is missing.
+Icons are drawn in code with Core Graphics rather than shipped as image assets, which keeps the bundle to a single binary and renders crisply at any scale.
+
+`rt_shims.c` provides runtime symbols (`_Unwind_SjLj_*`) that the armv7s toolchain doesn't ship. For the same reason the code avoids the `%` operator on integers: `__modsi3` is missing too.
 
 ### Why a custom player
 
@@ -106,6 +150,16 @@ Behaviors verified against a real server that aren't documented anywhere, and th
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+PlexMini is released under the **MIT License** — the full text is in [LICENSE](LICENSE). In plain terms:
 
-Not affiliated with Plex Inc. "Plex" is a trademark of Plex Inc.
+- **You can** use it, copy it, modify it, publish it, and distribute it, including commercially, without asking permission or paying anything.
+- **You must** keep the copyright notice and the license text in any copy or substantial portion you distribute.
+- **There is no warranty.** It's provided "as is". If it breaks something, that's on you — which is worth taking seriously here, since this is unsigned code running on a jailbroken device.
+
+MIT was chosen over a copyleft license on purpose: most of the value in this repo is the [Plex API notes](docs/PLEX_API.md) and the working transcode/seek logic, and anyone should be able to lift those into their own client without their project inheriting license obligations.
+
+### What the license does *not* cover
+
+- **Plex itself.** "Plex" is a trademark of Plex, Inc. This project is not affiliated with, endorsed by, or supported by Plex, Inc. The name is used only to describe what the client talks to. No Plex source code, artwork, or assets are included or redistributed here — the app is an independent implementation against the server's HTTP API, using your own server and your own account.
+- **Your media.** The app only plays content from a Plex server you already have access to. It provides no way to obtain content, and it bypasses nothing.
+- **Subtitles** fetched by the online search come from your server's own subtitle agents and are subject to whatever terms those providers set.
