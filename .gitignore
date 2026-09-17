@@ -1,0 +1,8 @@
+# Build output
+*.o
+*.app/
+*.app.tar.gz
+
+# macOS / editor noise
+.DS_Store
+*.swp
