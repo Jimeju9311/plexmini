@@ -43,7 +43,7 @@ Multi-user, Live TV/DVR, music, photos, Chromecast/AirPlay, offline downloads, s
 The server address lives at the top of `main.m`:
 
 ```objc
-#define PLEX_SERVER   @"http://192.168.1.149:32400"
+#define PLEX_SERVER   @"http://ipaddress:port"
 ```
 
 Change it to your own server before building.
