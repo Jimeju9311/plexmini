@@ -3,6 +3,7 @@
 #import "PlexConfig.h"
 #import "PlexPlayback.h"
 #import "PlexTheme.h"
+#import "PlayerSettingsViewController.h"
 #import "SubtitlePickerViewController.h"
 #import <AVKit/AVKit.h>
 #import <AVFoundation/AVFoundation.h>
@@ -222,29 +223,36 @@
     }
     self.subtitlesButton.alpha = [self subtitlesButtonVisibleAlpha];
     NSInteger current = [self currentAbsoluteSeconds];
-    [self stopCurrentSessionAndStartNewOneWithSubtitleChangeAtOffsetSeconds:current];
+    [self restartSessionAtOffsetSeconds:current];
     [self scheduleAutoHide];
 }
 
-// Opens the full subtitle picker (existing tracks + search/download online) that the
-// detail screen already uses, so the gear icon has a real function instead of a stub.
+// Opens the gear menu: quality and subtitles. Both settings need the transcode session
+// rebuilt at the current position, since neither can be changed on a running session.
 - (void)settingsTapped {
     [self.autoHideTimer invalidate];
-    SubtitlePickerViewController *picker = [[SubtitlePickerViewController alloc] init];
-    picker.ratingKey = self.item[@"ratingKey"];
-    picker.existingStreams = self.subtitleStreams;
-    picker.selectedStreamID = self.subtitleStreamID ?: @0;
+    PlayerSettingsViewController *settings = [[PlayerSettingsViewController alloc] init];
+    settings.ratingKey = self.item[@"ratingKey"];
+    settings.subtitleStreams = self.subtitleStreams;
+    settings.selectedSubtitleStreamID = self.subtitleStreamID ?: @0;
+
     __weak typeof(self) weakSelf = self;
-    picker.onSelect = ^(NSNumber *streamID) {
+    settings.onSelectSubtitle = ^(NSNumber *streamID) {
         __strong typeof(weakSelf) strongSelf = weakSelf;
         if (!strongSelf) return;
         strongSelf.subtitleStreamID = streamID;
         strongSelf.lastNonZeroSubtitleStreamID = (streamID.integerValue != 0) ? streamID : strongSelf.lastNonZeroSubtitleStreamID;
         strongSelf.subtitlesButton.alpha = [strongSelf subtitlesButtonVisibleAlpha];
-        NSInteger current = [strongSelf currentAbsoluteSeconds];
-        [strongSelf stopCurrentSessionAndStartNewOneWithSubtitleChangeAtOffsetSeconds:current];
+        [strongSelf restartSessionAtOffsetSeconds:[strongSelf currentAbsoluteSeconds]];
     };
-    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:picker];
+    settings.onChangeQuality = ^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        // Resume where the user is, so switching quality mid-film is not a restart.
+        [strongSelf restartSessionAtOffsetSeconds:[strongSelf currentAbsoluteSeconds]];
+    };
+
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:settings];
     nav.navigationBar.barStyle = UIBarStyleBlack;
     nav.modalPresentationStyle = UIModalPresentationFullScreen;
     [self presentViewController:nav animated:YES completion:nil];
@@ -341,7 +349,7 @@
 // stream (PUT /library/parts/{id}?subtitleStreamID=X), so that has to be set first, and only
 // then does starting a fresh transcode session (a reused session ignores the change too) pick
 // it up.
-- (void)stopCurrentSessionAndStartNewOneWithSubtitleChangeAtOffsetSeconds:(NSInteger)offset {
+- (void)restartSessionAtOffsetSeconds:(NSInteger)offset {
     NSString *oldSessionId = self.sessionId;
     if (oldSessionId) {
         NSString *stopStr = [NSString stringWithFormat:@"%@/video/:/transcode/universal/stop?session=%@", PLEX_SERVER, PlexURLEncode(oldSessionId)];
