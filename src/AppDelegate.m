@@ -23,6 +23,15 @@
     return YES;
 }
 
+// Info.plist already lists the landscape orientations, but iOS only offers an
+// orientation it has a launch image for, so before those existed the app could get
+// stuck in portrait. Answering here removes the dependency on that entirely: every
+// orientation except upside-down, which is disorienting for a video player.
+- (UIInterfaceOrientationMask)application:(UIApplication *)application
+          supportedInterfaceOrientationsForWindow:(UIWindow *)window {
+    return UIInterfaceOrientationMaskAllButUpsideDown;
+}
+
 - (void)showLibraries {
     PlexListViewController *root = [[PlexListViewController alloc] init];
     root.title = @"Plex";

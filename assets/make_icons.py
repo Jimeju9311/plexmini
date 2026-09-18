@@ -14,7 +14,7 @@ repo. Regenerate with:
 
 Generated PNGs are committed, so building the app does not require Python.
 """
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import os
 
 SS = 8  # supersample factor; downscaled with LANCZOS for clean edges
@@ -22,6 +22,10 @@ CHARCOAL = (24, 26, 30)
 AMBER = (230, 166, 33)
 AMBER_MID = (196, 140, 26)
 AMBER_DIM = (146, 104, 20)
+OFF_WHITE = (238, 238, 240)
+
+# The name as it appears under the icon on the home screen.
+WORDMARK = "PlexMini"
 
 # iOS 9/10 picks from CFBundleIconFiles by size. iPad 4 is retina, so 152 is the
 # one that actually shows on its home screen; the rest cover Spotlight,
@@ -71,6 +75,23 @@ def render(px):
     return img.resize((px, px), Image.LANCZOS)
 
 
+def load_font(size):
+    """A bold sans for the wordmark, or None if this machine has no usable TTF.
+
+    PIL's built-in default font is a fixed-size bitmap that cannot scale to these
+    canvases, so falling back to it would look worse than no text at all.
+    """
+    for path in ("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+                 "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+                 "/Library/Fonts/Arial Bold.ttf"):
+        if os.path.exists(path):
+            try:
+                return ImageFont.truetype(path, size)
+            except OSError:
+                pass
+    return None
+
+
 def render_launch(w, h):
     """The launch image, drawn at the device's native pixel size.
 
@@ -81,10 +102,32 @@ def render_launch(w, h):
     """
     ss = 4  # lower than the icons' 8x: these canvases are already huge
     W, H = w * ss, h * ss
+    short = min(W, H)
     img = Image.new("RGB", (W, H), CHARCOAL)
-    # Sized so the mark reads as the same logo the user just tapped, rather than a
-    # small dot adrift in a large field.
-    draw_mark(ImageDraw.Draw(img), W / 2, H / 2, min(W, H) * 0.62)
+    d = ImageDraw.Draw(img)
+
+    # Mark and wordmark are treated as one block and centred together, so the pair
+    # stays balanced instead of the mark sitting dead-centre with text hanging off it.
+    unit = short * 0.52
+    font = load_font(int(short * 0.085))
+    gap = short * 0.07
+
+    mark_h = unit * 0.42
+    text_h = 0
+    if font:
+        box = d.textbbox((0, 0), WORDMARK, font=font)
+        text_h = box[3] - box[1]
+
+    block_h = mark_h + (gap + text_h if font else 0)
+    top = (H - block_h) / 2
+
+    draw_mark(d, W / 2, top + mark_h / 2, unit)
+
+    if font:
+        box = d.textbbox((0, 0), WORDMARK, font=font)
+        d.text((W / 2 - (box[2] - box[0]) / 2 - box[0], top + mark_h + gap - box[1]),
+               WORDMARK, font=font, fill=OFF_WHITE)
+
     return img.resize((w, h), Image.LANCZOS)
 
 
