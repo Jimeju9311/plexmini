@@ -29,27 +29,63 @@ AMBER_DIM = (146, 104, 20)
 # Info.plist - build.sh copies every icon here into the bundle.
 SIZES = [29, 40, 50, 57, 58, 72, 76, 80, 87, 100, 114, 120, 144, 152, 167, 180]
 
+# Launch images, keyed by the filename iOS looks for -> native pixel size.
+# The iPad 4 is retina, so the @2x~ipad pair is what it actually uses; the rest
+# keep the iPhone/non-retina cases from falling back to a scaled-up icon.
+LAUNCH_IMAGES = {
+    "LaunchImage-iPad-Portrait~ipad.png": (768, 1024),
+    "LaunchImage-iPad-Portrait@2x~ipad.png": (1536, 2048),
+    "LaunchImage-iPad-Landscape~ipad.png": (1024, 768),
+    "LaunchImage-iPad-Landscape@2x~ipad.png": (2048, 1536),
+    "LaunchImage-iPhone@2x.png": (640, 960),
+    "LaunchImage-iPhone-568h@2x.png": (640, 1136),
+}
 
-def render(px):
-    """Three rounded bars of increasing height, centred as a group."""
-    s = px * SS
-    img = Image.new("RGB", (s, s), CHARCOAL)
-    d = ImageDraw.Draw(img)
 
-    bar_w = s * 0.118
-    gap = s * 0.062
-    x = (s - (bar_w * 3 + gap * 2)) / 2
+def draw_mark(draw, cx, cy, unit):
+    """Three rounded bars of increasing height, centred on (cx, cy).
+
+    Every dimension is a fraction of `unit`, so the same mark can be drawn onto a
+    square icon or a full-screen launch image at any aspect ratio.
+    """
+    bar_w = unit * 0.118
+    gap = unit * 0.062
     heights = [0.20, 0.31, 0.42]
+
+    x = cx - (bar_w * 3 + gap * 2) / 2
     # Centre the group on the tallest bar so the cluster sits optically centred
     # rather than hanging from a shared baseline.
-    base = s / 2 + s * max(heights) / 2
+    base = cy + unit * max(heights) / 2
 
     for h, color in zip(heights, (AMBER_DIM, AMBER_MID, AMBER)):
-        d.rounded_rectangle([x, base - s * h, x + bar_w, base],
-                            radius=bar_w / 2, fill=color)
+        draw.rounded_rectangle([x, base - unit * h, x + bar_w, base],
+                               radius=bar_w / 2, fill=color)
         x += bar_w + gap
 
+
+def render(px):
+    """The square app icon."""
+    s = px * SS
+    img = Image.new("RGB", (s, s), CHARCOAL)
+    draw_mark(ImageDraw.Draw(img), s / 2, s / 2, s)
     return img.resize((px, px), Image.LANCZOS)
+
+
+def render_launch(w, h):
+    """The launch image, drawn at the device's native pixel size.
+
+    Without one, iOS scales the largest app icon (180px) up to fill the screen
+    during the open animation, which on a 2048x1536 panel looks obviously soft.
+    The mark is sized off the short edge so it stays identical between portrait
+    and landscape.
+    """
+    ss = 4  # lower than the icons' 8x: these canvases are already huge
+    W, H = w * ss, h * ss
+    img = Image.new("RGB", (W, H), CHARCOAL)
+    # Sized so the mark reads as the same logo the user just tapped, rather than a
+    # small dot adrift in a large field.
+    draw_mark(ImageDraw.Draw(img), W / 2, H / 2, min(W, H) * 0.62)
+    return img.resize((w, h), Image.LANCZOS)
 
 
 def main():
@@ -62,6 +98,13 @@ def main():
         # and corner radius, so a transparent background renders as black.
         render(px).convert("RGB").save(os.path.join(icon_dir, "Icon-%d.png" % px))
     print("wrote %d icons to %s" % (len(SIZES), icon_dir))
+
+    # Launch images. The filename suffixes are what iOS matches against, and the
+    # sizes in Info.plist's UILaunchImages are in *points*, so a retina iPad asks
+    # for {768, 1024} and is served the @2x~ipad file at 1536x2048 pixels.
+    for name, (w, h) in LAUNCH_IMAGES.items():
+        render_launch(w, h).convert("RGB").save(os.path.join(icon_dir, name))
+    print("wrote %d launch images" % len(LAUNCH_IMAGES))
 
     render(512).save(os.path.join(here, "logo.png"))
     print("wrote logo.png")

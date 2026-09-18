@@ -43,13 +43,13 @@ rm -rf "$BUILD"
 mkdir -p "$BUILD" "$APP_DIR"
 cp "$ROOT/Info.plist" "$APP_DIR/Info.plist"
 
-# Icons sit at the bundle root, which is where CFBundleIconFiles looks for them.
-# They are committed as PNGs, so building needs no Python; regenerate them with
-# assets/make_icons.py if the artwork changes.
-if compgen -G "$ROOT/assets/icons/Icon-*.png" >/dev/null; then
-  cp "$ROOT"/assets/icons/Icon-*.png "$APP_DIR/"
+# Icons and launch images sit at the bundle root, which is where CFBundleIconFiles
+# and UILaunchImages look for them. They are committed as PNGs, so building needs no
+# Python; regenerate them with assets/make_icons.py if the artwork changes.
+if compgen -G "$ROOT/assets/icons/*.png" >/dev/null; then
+  cp "$ROOT"/assets/icons/*.png "$APP_DIR/"
 else
-  echo "warning: no icons found in assets/icons - the app will use the default icon" >&2
+  echo "warning: no artwork found in assets/icons - the app will use the default icon" >&2
 fi
 
 # rt_shims.c supplies runtime symbols (_Unwind_SjLj_*) the armv7s toolchain omits.
