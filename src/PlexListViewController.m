@@ -13,9 +13,28 @@
     self.tableView.rowHeight = 96;
     self.tableView.separatorColor = [UIColor colorWithWhite:0.2 alpha:1];
     [self.tableView registerClass:[PlexCell class] forCellReuseIdentifier:@"cell"];
+    [self.tableView registerClass:[UITableViewCell class] forCellReuseIdentifier:@"plain"];
     UIBarButtonItem *refresh = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh target:self action:@selector(reload)];
     self.navigationItem.rightBarButtonItem = refresh;
+
+    // Pull down to refresh: the refresh button is easy to miss, and new content shows up
+    // on the server while a list is already on screen.
+    UIRefreshControl *pull = [[UIRefreshControl alloc] init];
+    pull.tintColor = [UIColor whiteColor];
+    [pull addTarget:self action:@selector(reload) forControlEvents:UIControlEventValueChanged];
+    self.refreshControl = pull;
+
     [self reload];
+}
+
+// The root screen leads with a "recently added" shortcut, so new films and episodes are
+// one tap away instead of having to be hunted down inside their library.
+- (BOOL)showsRecentlyAddedSection {
+    return self.isTopLevel;
+}
+
+- (BOOL)isRecentlyAddedRow:(NSIndexPath *)indexPath {
+    return [self showsRecentlyAddedSection] && indexPath.section == 0;
 }
 
 - (void)reload {
@@ -27,6 +46,7 @@
                 preferredStyle:UIAlertControllerStyleAlert];
             [alert addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleDefault handler:nil]];
             [self presentViewController:alert animated:YES completion:nil];
+            [self.refreshControl endRefreshing];
             return;
         }
         NSDictionary *container = json[@"MediaContainer"];
@@ -34,11 +54,22 @@
         NSArray *metadata = container[@"Metadata"];
         self.items = directory ?: metadata ?: @[];
         [self.tableView reloadData];
+        [self.refreshControl endRefreshing];
     }];
 }
 
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView {
+    return [self showsRecentlyAddedSection] ? 2 : 1;
+}
+
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    if ([self showsRecentlyAddedSection] && section == 0) return 1;
     return self.items.count;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    if (![self showsRecentlyAddedSection]) return nil;
+    return section == 0 ? @"Novedades" : @"Bibliotecas";
 }
 
 - (NSString *)subtitleForItem:(NSDictionary *)item {
@@ -46,7 +77,14 @@
     if ([type isEqualToString:@"episode"]) {
         NSNumber *season = item[@"parentIndex"];
         NSNumber *episode = item[@"index"];
-        return [NSString stringWithFormat:@"T%@E%@", season ?: @0, episode ?: @0];
+        NSString *code = [NSString stringWithFormat:@"T%@E%@", season ?: @0, episode ?: @0];
+        // Inside a season the show is obvious from context, but in a mixed list (the
+        // recently-added screen) "T1E2" alone doesn't say which show it belongs to.
+        NSString *show = item[@"grandparentTitle"];
+        if ([show isKindOfClass:[NSString class]] && show.length > 0) {
+            return [NSString stringWithFormat:@"%@ · %@", show, code];
+        }
+        return code;
     }
     if ([type isEqualToString:@"movie"]) {
         NSNumber *year = item[@"year"];
@@ -58,6 +96,15 @@
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    if ([self isRecentlyAddedRow:indexPath]) {
+        UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"plain" forIndexPath:indexPath];
+        cell.backgroundColor = [UIColor colorWithWhite:0.08 alpha:1];
+        cell.textLabel.textColor = [UIColor whiteColor];
+        cell.textLabel.text = @"Anadido recientemente";
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+        return cell;
+    }
+
     PlexCell *cell = [tableView dequeueReusableCellWithIdentifier:@"cell" forIndexPath:indexPath];
     NSDictionary *item = self.items[indexPath.row];
     cell.textLabel.text = item[@"title"] ?: @"(sin titulo)";
@@ -78,6 +125,17 @@
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
+
+    if ([self isRecentlyAddedRow:indexPath]) {
+        PlexListViewController *next = [[PlexListViewController alloc] init];
+        next.title = @"Anadido recientemente";
+        // Capped because this spans every library at once and the default is unbounded.
+        next.fetchPath = @"/library/recentlyAdded?X-Plex-Container-Start=0&X-Plex-Container-Size=60";
+        next.isTopLevel = NO;
+        [self.navigationController pushViewController:next animated:YES];
+        return;
+    }
+
     NSDictionary *item = self.items[indexPath.row];
 
     if (self.isTopLevel) {
